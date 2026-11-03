@@ -118,4 +118,587 @@
     .modal { background: #fff; width: 100%; max-width: 440px; border-radius: 18px; padding: 18px; max-height: 85vh; overflow-y: auto; }
 
     /* Toast */
-    .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 30px; font-size: 0.85rem; z-index: 200; opacity
+    .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 30px; font-size: 0.85rem; z-index: 200; opacity: 0; pointer-events: none; transition: 0.25s; box-shadow: 0 6px 16px rgba(0,0,0,0.2); }
+    .toast.show { opacity: 1; top: 24px; }
+    .tab-view { display: none; }
+    .tab-view.active { display: block; }
+  </style>
+</head>
+<body>
+
+  <div id="toast" class="toast">บันทึกเรียบร้อย</div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <div class="app-title">🏠 HomeLog</div>
+      <input type="month" id="monthPicker" class="month-picker">
+    </div>
+    <div class="summary-row">
+      <div>
+        <div class="total-label">ยอดใช้จ่ายรวมเดือนนี้</div>
+        <div class="total-val" id="headerTotal">฿0</div>
+      </div>
+      <div style="text-align:right; font-size:0.78rem; color:#cbd5e1;" id="headerCount">0 รายการ</div>
+    </div>
+    <div class="user-mini-pills" id="headerUserPills"></div>
+  </header>
+
+  <main class="container">
+    <!-- TAB 1: QUICK ADD -->
+    <section id="tab-add" class="tab-view active">
+      <div class="card">
+        <div class="section-title">
+          <span id="formTitle">⚡ จดรายการด่วน</span>
+          <button id="cancelEditBtn" class="btn btn-outline btn-sm" style="display:none;" onclick="resetForm()">ยกเลิกแก้ไข</button>
+        </div>
+
+        <input type="hidden" id="editId">
+
+        <div class="form-group">
+          <label class="label">ชื่อสินค้า / รายการ</label>
+          <input type="text" id="itemName" placeholder="เช่น อกไก่, กาแฟ, ทิชชู่, นมลูก..." autocomplete="off">
+          <div class="quick-chips" id="quickChips"></div>
+        </div>
+
+        <div class="form-group input-row">
+          <div>
+            <label class="label">จำนวนเงิน (บาท)</label>
+            <input type="number" id="itemAmount" placeholder="0" inputmode="decimal">
+          </div>
+          <div>
+            <label class="label">วันที่</label>
+            <input type="date" id="itemDate">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="label">ใครใช้เป็นหลัก (For Whom)</label>
+          <div class="user-grid" id="userGrid">
+            <div class="user-btn active" data-user="Family" onclick="selectUser('Family')"><span>👨‍👩‍👧‍👦</span>Family</div>
+            <div class="user-btn" data-user="Daddy" onclick="selectUser('Daddy')"><span>👨</span>Daddy</div>
+            <div class="user-btn" data-user="Mommy" onclick="selectUser('Mommy')"><span>👩</span>Mommy</div>
+            <div class="user-btn" data-user="Baby" onclick="selectUser('Baby')"><span>👶</span>Baby</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="section-title" style="margin-bottom:6px;">
+            <span class="label" style="margin:0;">หมวดหมู่ (Category)</span>
+            <button class="act-btn" style="color:var(--primary); font-weight:500;" onclick="openCatModal()">⚙️ แก้ไข/เพิ่มหมวด</button>
+          </div>
+          <div class="cat-grid" id="catGrid"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="label">ร้านค้า / แหล่งซื้อ (ไม่บังคับ)</label>
+          <input type="text" id="itemStore" placeholder="เช่น Makro, Shopee, 7-11, ตลาด...">
+        </div>
+
+        <button class="btn btn-primary" onclick="saveExpense()" id="saveBtn">💾 บันทึกรายการ</button>
+      </div>
+
+      <div class="card">
+        <div class="section-title">
+          <span>🕒 รายการล่าสุดของเดือนนี้</span>
+          <button class="act-btn" style="color:var(--primary);" onclick="switchTab('history')">ดูทั้งหมด →</button>
+        </div>
+        <div id="recentList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 2: OVERVIEW & HISTORY -->
+    <section id="tab-history" class="tab-view">
+      <div class="card">
+        <div class="section-title">👥 สัดส่วนตามผู้ใช้ (For Whom)</div>
+        <div id="userBreakdown"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">📊 สัดส่วนตามหมวดหมู่</div>
+        <div id="catBreakdown"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">📜 ประวัติรายการในเดือนนี้</div>
+        <div class="form-group" style="display:grid; grid-template-columns: 1.3fr 1fr; gap:8px; margin-bottom:10px;">
+          <input type="text" id="searchBox" placeholder="🔍 ค้นหาชื่อ/ร้านค้า..." oninput="renderAll()">
+          <select id="filterUser" onchange="renderAll()">
+            <option value="ALL">ทุกคน (All)</option>
+            <option value="Family">👨‍👩‍👧‍👦 Family</option>
+            <option value="Daddy">👨 Daddy</option>
+            <option value="Mommy">👩 Mommy</option>
+            <option value="Baby">👶 Baby</option>
+          </select>
+        </div>
+        <div id="fullHistoryList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 3: AI & BACKUP -->
+    <section id="tab-ai" class="tab-view">
+      <div class="card">
+        <div class="section-title">🤖 ส่งข้อมูลให้ AI วิเคราะห์</div>
+        <p style="font-size:0.8rem; color:var(--muted); margin-bottom:12px;">
+          กดปุ่มด้านล่างเพื่อคัดลอกตารางสรุป Cross-Analysis (หมวดหมู่ x คนใช้) พร้อมรายการ CSV และคำสั่ง Prompt สำเร็จรูป แล้วนำไปวาง (Paste) ในแชท AI ได้เลย
+        </p>
+        <button class="btn btn-purple" onclick="copyAiPrompt()">✨ คัดลอกข้อมูล + Prompt ให้ AI</button>
+      </div>
+
+      <div class="card">
+        <div class="section-title">📁 สำรองข้อมูล (Backup & Export)</div>
+        <div style="display:grid; gap:10px;">
+          <button class="btn btn-outline" onclick="exportCSV()">📊 ดาวน์โหลดไฟล์ Excel (.CSV)</button>
+          <button class="btn btn-outline" onclick="exportJSON()">💾 ดาวน์โหลดไฟล์ Backup (.JSON)</button>
+          <label class="btn btn-outline" style="cursor:pointer;">
+            📂 นำเข้าไฟล์ Backup (.JSON)
+            <input type="file" accept=".json" style="display:none;" onchange="importJSON(event)">
+          </label>
+          <button class="btn btn-outline" style="color:var(--danger); border-color:#fecaca;" onclick="clearAllData()">🗑️ ล้างข้อมูลทั้งหมดในเครื่อง</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Category Modal -->
+  <div id="catModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="section-title">
+        <span>⚙️ จัดการหมวดหมู่</span>
+        <button class="act-btn" onclick="closeCatModal()" style="font-size:1rem;">✕</button>
+      </div>
+      <div id="catManageList" style="margin-bottom:14px;"></div>
+      <div style="display:grid; grid-template-columns: 70px 1fr auto; gap:8px;">
+        <input type="text" id="newCatEmoji" placeholder="📦" maxlength="2" style="text-align:center;">
+        <input type="text" id="newCatName" placeholder="ชื่อหมวดหมู่ใหม่...">
+        <button class="btn btn-primary" style="width:auto; padding:0 14px;" onclick="addCategory()">เพิ่ม</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-tab="add" onclick="switchTab('add')">
+      <span class="ico">➕</span>จดรายจ่าย
+    </button>
+    <button class="nav-btn" data-tab="history" onclick="switchTab('history')">
+      <span class="ico">📊</span>ภาพรวม & ประวัติ
+    </button>
+    <button class="nav-btn" data-tab="ai" onclick="switchTab('ai')">
+      <span class="ico">🤖</span>AI & Backup
+    </button>
+  </nav>
+
+  <script>
+    const STORAGE_EXP = 'homelog_expenses_v1';
+    const STORAGE_CAT = 'homelog_categories_v1';
+    const STORAGE_MEM = 'homelog_memory_v1';
+
+    const DEFAULT_CATS = [
+      { id: 'c1', emoji: '🥩', name: 'ของสด / วัตถุดิบทำอาหาร' },
+      { id: 'c2', emoji: '🥛', name: 'นม / กาแฟ / เครื่องดื่ม' },
+      { id: 'c3', emoji: '🍿', name: 'Snacks ขนม / อาหารสำเร็จรูป' },
+      { id: 'c4', emoji: '🧻', name: 'ของใช้สิ้นเปลืองในบ้าน' },
+      { id: 'c5', emoji: '🧴', name: 'ของใช้ส่วนตัว / สกินแคร์ / สุขภาพ' },
+      { id: 'c6', emoji: '📦', name: 'อื่นๆ / จิปาถะ' }
+    ];
+
+    let expenses = JSON.parse(localStorage.getItem(STORAGE_EXP) || '[]');
+    let categories = JSON.parse(localStorage.getItem(STORAGE_CAT) || 'null') || DEFAULT_CATS;
+    let smartMemory = JSON.parse(localStorage.getItem(STORAGE_MEM) || '{}');
+
+    let selectedUser = 'Family';
+    let selectedCatId = categories[0]?.id || 'c1';
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('itemDate').value = today;
+      document.getElementById('monthPicker').value = today.slice(0, 7);
+
+      document.getElementById('monthPicker').addEventListener('change', renderAll);
+      document.getElementById('itemName').addEventListener('input', (e) => applySmartMemory(e.target.value));
+
+      renderCategories();
+      renderQuickChips();
+      renderAll();
+    });
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_EXP, JSON.stringify(expenses));
+      localStorage.setItem(STORAGE_CAT, JSON.stringify(categories));
+      localStorage.setItem(STORAGE_MEM, JSON.stringify(smartMemory));
+    }
+
+    function selectUser(user) {
+      selectedUser = user;
+      document.querySelectorAll('#userGrid .user-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.user === user);
+      });
+    }
+
+    function selectCat(id) {
+      selectedCatId = id;
+      document.querySelectorAll('#catGrid .cat-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.id === id);
+      });
+    }
+
+    function renderCategories() {
+      const grid = document.getElementById('catGrid');
+      if (!categories.find(c => c.id === selectedCatId) && categories.length > 0) {
+        selectedCatId = categories[0].id;
+      }
+      grid.innerHTML = categories.map(c => `
+        <div class="cat-btn ${c.id === selectedCatId ? 'active' : ''}" data-id="${c.id}" onclick="selectCat('${c.id}')">
+          <span class="emoji">${c.emoji}</span>
+          <span style="line-height:1.2;">${c.name}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderQuickChips() {
+      const wrap = document.getElementById('quickChips');
+      const keys = Object.keys(smartMemory).slice(-10).reverse();
+      if (keys.length === 0) {
+        wrap.innerHTML = '';
+        return;
+      }
+      wrap.innerHTML = keys.map(k => `
+        <span class="q-chip" onclick="useQuickChip('${k.replace(/'/g, "\\'")}')">⚡ ${k}</span>
+      `).join('');
+    }
+
+    function useQuickChip(name) {
+      document.getElementById('itemName').value = name;
+      applySmartMemory(name);
+      document.getElementById('itemAmount').focus();
+    }
+
+    function applySmartMemory(val) {
+      const key = val.trim();
+      if (smartMemory[key]) {
+        const mem = smartMemory[key];
+        if (mem.user) selectUser(mem.user);
+        if (mem.catId && categories.some(c => c.id === mem.catId)) selectCat(mem.catId);
+        if (mem.store && !document.getElementById('itemStore').value) {
+          document.getElementById('itemStore').value = mem.store;
+        }
+      }
+    }
+
+    function saveExpense() {
+      const name = document.getElementById('itemName').value.trim();
+      const amount = parseFloat(document.getElementById('itemAmount').value);
+      const date = document.getElementById('itemDate').value;
+      const store = document.getElementById('itemStore').value.trim();
+      const editId = document.getElementById('editId').value;
+
+      if (!name) return showToast('⚠️ กรุณาใส่ชื่อรายการ');
+      if (!amount || amount <= 0) return showToast('⚠️ กรุณาใส่จำนวนเงิน');
+
+      smartMemory[name] = { user: selectedUser, catId: selectedCatId, store };
+
+      if (editId) {
+        const idx = expenses.findIndex(x => x.id === editId);
+        if (idx > -1) {
+          expenses[idx] = { ...expenses[idx], name, amount, date, user: selectedUser, catId: selectedCatId, store };
+        }
+        showToast('✅ แก้ไขรายการแล้ว');
+      } else {
+        expenses.unshift({
+          id: 'exp_' + Date.now(),
+          name, amount, date,
+          user: selectedUser,
+          catId: selectedCatId,
+          store
+        });
+        showToast('✅ บันทึกรายการแล้ว');
+      }
+
+      saveState();
+      resetForm();
+      renderQuickChips();
+      renderAll();
+    }
+
+    function resetForm() {
+      document.getElementById('editId').value = '';
+      document.getElementById('itemName').value = '';
+      document.getElementById('itemAmount').value = '';
+      document.getElementById('itemStore').value = '';
+      document.getElementById('formTitle').textContent = '⚡ จดรายการด่วน';
+      document.getElementById('saveBtn').textContent = '💾 บันทึกรายการ';
+      document.getElementById('cancelEditBtn').style.display = 'none';
+      selectUser('Family');
+    }
+
+    function editExpense(id) {
+      const item = expenses.find(x => x.id === id);
+      if (!item) return;
+      switchTab('add');
+      document.getElementById('editId').value = item.id;
+      document.getElementById('itemName').value = item.name;
+      document.getElementById('itemAmount').value = item.amount;
+      document.getElementById('itemDate').value = item.date;
+      document.getElementById('itemStore').value = item.store || '';
+      selectUser(item.user);
+      selectCat(item.catId);
+      document.getElementById('formTitle').textContent = '✏️ แก้ไขรายการ';
+      document.getElementById('saveBtn').textContent = '💾 อัปเดตรายการ';
+      document.getElementById('cancelEditBtn').style.display = 'inline-flex';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function deleteExpense(id) {
+      if (!confirm('ลบรายการนี้ใช่ไหม?')) return;
+      expenses = expenses.filter(x => x.id !== id);
+      saveState();
+      renderAll();
+      showToast('🗑️ ลบรายการแล้ว');
+    }
+
+    function getMonthExpenses() {
+      const ym = document.getElementById('monthPicker').value;
+      return expenses.filter(x => x.date && x.date.startsWith(ym));
+    }
+
+    function getCatObj(id) {
+      return categories.find(c => c.id === id) || { emoji: '📦', name: 'อื่นๆ' };
+    }
+
+    function renderAll() {
+      const list = getMonthExpenses();
+      const total = list.reduce((s, x) => s + x.amount, 0);
+
+      document.getElementById('headerTotal').textContent = '฿' + total.toLocaleString('th-TH', { maximumFractionDigits: 2 });
+      document.getElementById('headerCount').textContent = `${list.length} รายการ`;
+
+      // User sums
+      const userMap = { Family: 0, Daddy: 0, Mommy: 0, Baby: 0 };
+      list.forEach(x => { userMap[x.user] = (userMap[x.user] || 0) + x.amount; });
+
+      document.getElementById('headerUserPills').innerHTML = Object.entries(userMap).map(([u, val]) => `
+        <div class="user-mini">${u}: <b>฿${val.toLocaleString()}</b></div>
+      `).join('');
+
+      // Recent 5
+      const recentEl = document.getElementById('recentList');
+      if (list.length === 0) {
+        recentEl.innerHTML = `<div style="text-align:center; padding:18px; color:var(--muted); font-size:0.85rem;">ยังไม่มีรายการในเดือนนี้</div>`;
+      } else {
+        recentEl.innerHTML = list.slice(0, 5).map(renderItemRow).join('');
+      }
+
+      // Breakdown Users
+      document.getElementById('userBreakdown').innerHTML = Object.entries(userMap).map(([u, val]) => {
+        const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+        return `
+          <div class="bar-item">
+            <div class="bar-head"><span><b>${u}</b></span><span>฿${val.toLocaleString()} (${pct}%)</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          </div>
+        `;
+      }).join('');
+
+      // Breakdown Categories
+      const catSums = {};
+      list.forEach(x => { catSums[x.catId] = (catSums[x.catId] || 0) + x.amount; });
+      const sortedCats = Object.entries(catSums).sort((a, b) => b[1] - a[1]);
+      document.getElementById('catBreakdown').innerHTML = sortedCats.length === 0
+        ? `<div style="color:var(--muted); font-size:0.84rem;">ไม่มีข้อมูล</div>`
+        : sortedCats.map(([cid, val]) => {
+            const c = getCatObj(cid);
+            const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+            return `
+              <div class="bar-item">
+                <div class="bar-head"><span>${c.emoji} ${c.name}</span><span>฿${val.toLocaleString()} (${pct}%)</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:#7c3aed;"></div></div>
+              </div>
+            `;
+          }).join('');
+
+      // Full Filtered History
+      const q = (document.getElementById('searchBox')?.value || '').toLowerCase();
+      const fu = document.getElementById('filterUser')?.value || 'ALL';
+      const filtered = list.filter(x => {
+        const matchUser = fu === 'ALL' || x.user === fu;
+        const matchText = x.name.toLowerCase().includes(q) || (x.store || '').toLowerCase().includes(q);
+        return matchUser && matchText;
+      });
+      document.getElementById('fullHistoryList').innerHTML = filtered.length === 0
+        ? `<div style="text-align:center; padding:18px; color:var(--muted); font-size:0.85rem;">ไม่พบรายการ</div>`
+        : filtered.map(renderItemRow).join('');
+    }
+
+    function renderItemRow(x) {
+      const c = getCatObj(x.catId);
+      return `
+        <div class="item-row">
+          <div class="item-left">
+            <div class="item-icon">${c.emoji}</div>
+            <div>
+              <div class="item-name">${x.name}</div>
+              <div class="item-meta">
+                <span class="badge ${x.user}">${x.user}</span>
+                <span>${x.date.slice(5)}</span>
+                ${x.store ? `<span>• ${x.store}</span>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="item-right">
+            <div class="item-amt">฿${x.amount.toLocaleString()}</div>
+            <div class="item-actions">
+              <button class="act-btn" onclick="editExpense('${x.id}')">แก้ไข</button>
+              <button class="act-btn del" onclick="deleteExpense('${x.id}')">ลบ</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + tab).classList.add('active');
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      renderAll();
+    }
+
+    // Category Modal Management
+    function openCatModal() {
+      renderCatManageList();
+      document.getElementById('catModal').classList.add('show');
+    }
+    function closeCatModal() {
+      document.getElementById('catModal').classList.remove('show');
+    }
+    function renderCatManageList() {
+      document.getElementById('catManageList').innerHTML = categories.map(c => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">
+          <span>${c.emoji} ${c.name}</span>
+          ${categories.length > 1 ? `<button class="act-btn del" onclick="removeCategory('${c.id}')">ลบ</button>` : ''}
+        </div>
+      `).join('');
+    }
+    function addCategory() {
+      const emoji = document.getElementById('newCatEmoji').value.trim() || '📦';
+      const name = document.getElementById('newCatName').value.trim();
+      if (!name) return;
+      categories.push({ id: 'c_' + Date.now(), emoji, name });
+      document.getElementById('newCatEmoji').value = '';
+      document.getElementById('newCatName').value = '';
+      saveState();
+      renderCategories();
+      renderCatManageList();
+    }
+    function removeCategory(id) {
+      categories = categories.filter(c => c.id !== id);
+      saveState();
+      renderCategories();
+      renderCatManageList();
+      renderAll();
+    }
+
+    // AI Prompt Copy & Exports
+    function copyAiPrompt() {
+      const ym = document.getElementById('monthPicker').value;
+      const list = getMonthExpenses();
+      if (list.length === 0) return showToast('⚠️ ไม่มีข้อมูลในเดือนนี้');
+
+      const total = list.reduce((s, x) => s + x.amount, 0);
+      const csvLines = ['Date,Item,Category,ForWhom,Amount,Store'];
+      list.forEach(x => {
+        const c = getCatObj(x.catId);
+        csvLines.push(`${x.date},"${x.name}","${c.name}",${x.user},${x.amount},"${x.store || ''}"`);
+      });
+
+      const prompt = `ช่วยวิเคราะห์รายจ่ายครอบครัวประจำเดือน ${ym} (ยอดรวม ${total.toLocaleString()} บาท) จากข้อมูล CSV ด้านล่างนี้ให้หน่อย:
+1. สรุปสัดส่วนการใช้จ่ายแยกตามผู้ใช้ (Family, Daddy, Mommy, Baby) และแยกตามหมวดหมู่
+2. วิเคราะห์ Cross-Analysis (หมวดหมู่ x คนใช้) ว่าใครใช้งบไปกับหมวดไหนสูงเป็นพิเศษ
+3. ชี้จุดที่มีรายการซื้อซ้ำบ่อย หรือยอดที่สามารถปรับลดเพื่อประหยัดงบในเดือนถัดไปได้
+
+\`\`\`csv
+${csvLines.join('\n')}
+\`\`\``;
+
+      navigator.clipboard.writeText(prompt).then(() => {
+        showToast('✨ คัดลอก Prompt + ข้อมูลแล้ว นำไปวางใน AI ได้เลย!');
+      });
+    }
+
+    function exportCSV() {
+      const ym = document.getElementById('monthPicker').value;
+      const list = getMonthExpenses();
+      if (list.length === 0) return showToast('⚠️ ไม่มีข้อมูลในเดือนนี้');
+      const rows = [['Date', 'Item', 'Category', 'ForWhom', 'Amount', 'Store']];
+      list.forEach(x => {
+        const c = getCatObj(x.catId);
+        rows.push([x.date, `"${x.name}"`, `"${c.name}"`, x.user, x.amount, `"${x.store || ''}"`]);
+      });
+      const csvContent = '\uFEFF' + rows.map(e => e.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `HomeLog_${ym}.csv`;
+      a.click();
+    }
+
+    function exportJSON() {
+      const data = { expenses, categories, smartMemory, exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `HomeLog_Backup_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+    }
+
+    function importJSON(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (data.expenses) expenses = data.expenses;
+          if (data.categories) categories = data.categories;
+          if (data.smartMemory) smartMemory = data.smartMemory;
+          saveState();
+          renderCategories();
+          renderQuickChips();
+          renderAll();
+          showToast('✅ นำเข้าข้อมูลสำเร็จ!');
+        } catch {
+          showToast('❌ ไฟล์ไม่ถูกต้อง');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function clearAllData() {
+      if (!confirm('ยืนยันล้างข้อมูลทั้งหมดในเครื่อง? (แนะนำให้กด Backup JSON เก็บไว้ก่อน)')) return;
+      expenses = [];
+      smartMemory = {};
+      saveState();
+      renderQuickChips();
+      renderAll();
+      showToast('🗑️ ล้างข้อมูลทั้งหมดแล้ว');
+    }
+
+    // Register Service Worker for Offline PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
